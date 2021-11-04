@@ -1,40 +1,38 @@
-import java.io.DataOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.List;
 
 public class Speler1 {
     private String naam;
-    private int weekNr;
+    private int week;
 
     // De tijdelijke dataopslag
     private LinkedList<Order> dataopslag1;
 
     public Speler1(String naam) {
         this.naam = naam;
-        this.weekNr = 1;
+        this.week = 1;
 
         dataopslag1 = new LinkedList<>();
     }
 
     public void plaatsOrder(int aantal) {
-        Order order = new Order(weekNr, this.naam, aantal);
+        Order order = new Order(week, this.naam, aantal);
         dataopslag1.add(order);
         send(order);
-        weekNr++;
+        week++;
     }
 
     private void send(Order order){
         try {
             Socket s = new Socket("localhost", 6666);
 
-            //DataOutputStream dout=new DataOutputStream(s.getOutputStream());
-            //dout.writeUTF("Hello Server");
-
             ObjectOutputStream dout = new ObjectOutputStream(s.getOutputStream());
-            dout.writeObject(order);
+            dout.writeObject(packaging(order));
 
             dout.flush();
             dout.close();
@@ -44,15 +42,45 @@ public class Speler1 {
         }
     }
 
+    /**
+     * Maakt van de order een te verzenden arraylist
+     * @param order
+     * @return te verzenden order
+     */
+    private List<String> packaging(Order order) {
+        List<String> output = new ArrayList<>();
+        output.add(String.valueOf(order.week));
+        output.add(order.naam);
+        output.add(String.valueOf((order.order)));
+        return output;
+    }
+
     public static void receive() {
         try {
             ServerSocket ss = new ServerSocket(6666);
             Socket s = ss.accept();//establishes connection
             ObjectInputStream dis = new ObjectInputStream(s.getInputStream());
-            Order orderFromPlayer = (Order) dis.readObject();
 
-            Order order = new Order(orderFromPlayer.week, orderFromPlayer.naam, orderFromPlayer.order);
-            System.out.println("message= " + order);
+            List<String> listOfMessages = (List<String>) dis.readObject();
+            System.out.println("Received [" + listOfMessages.size() + "] messages from: " + s);
+
+            System.out.println("All messages:");
+            for (String message: listOfMessages) {
+                switch (listOfMessages.indexOf(message)){
+                    case 0:
+                        System.out.println("Week: " + message);
+                        break;
+                    case 1:
+                        System.out.println("Naam: " + message);
+                        break;
+                    case 2:
+                        System.out.println("Aantal: " + message);
+                        break;
+                    default:
+                        System.out.println("Einde");
+                }
+            }
+
             ss.close();
         } catch (Exception e) {
             System.out.println(e.toString());
@@ -63,7 +91,7 @@ public class Speler1 {
     public String toString() {
         return "Speler1{" +
                 "naam='" + naam + '\'' +
-                ", weekNr=" + weekNr +
+                ", weekNr=" + week +
                 ", dataopslag1=" + dataopslag1 +
                 '}';
     }
