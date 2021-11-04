@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
@@ -9,13 +10,19 @@ import java.util.List;
 public class Speler1 {
     private String naam;
     private int week;
+    private boolean aanDeBeurt;
+    private boolean actief;
+    private ServerSocket socket1;
 
     // De tijdelijke dataopslag
-    private LinkedList<Order> dataopslag1;
+    private final LinkedList<Order> dataopslag1;
 
-    public Speler1(String naam) {
+    public Speler1(String naam) throws IOException {
         this.naam = naam;
         this.week = 1;
+        this.aanDeBeurt = true;
+        this.actief = true;
+        this.socket1 = new ServerSocket(6665);
 
         dataopslag1 = new LinkedList<>();
     }
@@ -27,7 +34,7 @@ public class Speler1 {
         week++;
     }
 
-    private void send(Order order){
+    private void send(Order order) {
         try {
             Socket s = new Socket("localhost", 6666);
 
@@ -37,6 +44,7 @@ public class Speler1 {
             dout.flush();
             dout.close();
             s.close();
+            aanDeBeurt = false;
         } catch (Exception e) {
             System.out.println(e.toString());
         }
@@ -44,6 +52,7 @@ public class Speler1 {
 
     /**
      * Maakt van de order een te verzenden arraylist
+     *
      * @param order
      * @return te verzenden order
      */
@@ -55,33 +64,38 @@ public class Speler1 {
         return output;
     }
 
-    public static void receive() {
+    public void receive() {
         try {
-            ServerSocket ss = new ServerSocket(6666);
-            Socket s = ss.accept();//establishes connection
-            ObjectInputStream dis = new ObjectInputStream(s.getInputStream());
+            Socket speler1 = socket1.accept(); //establishes connection
+            ObjectInputStream dis = new ObjectInputStream(speler1.getInputStream());
 
             List<String> listOfMessages = (List<String>) dis.readObject();
-            System.out.println("Received [" + listOfMessages.size() + "] messages from: " + s);
+            System.out.println("Received [" + listOfMessages.size() + "] messages from: " + speler1);
+            String weekReceived = null;
+            String naamReceived = null;
+            String aantalReceived = null;
 
-            System.out.println("All messages:");
-            for (String message: listOfMessages) {
-                switch (listOfMessages.indexOf(message)){
+            for (String message : listOfMessages) {
+                switch (listOfMessages.indexOf(message)) {
                     case 0:
-                        System.out.println("Week: " + message);
+                        weekReceived = message;
                         break;
                     case 1:
-                        System.out.println("Naam: " + message);
+                        naamReceived = message;
                         break;
                     case 2:
-                        System.out.println("Aantal: " + message);
+                        aantalReceived = message;
                         break;
                     default:
-                        System.out.println("Einde");
+                        System.out.println("Error");
                 }
             }
+            Order orderReceived = new Order(Integer.parseInt(weekReceived), naamReceived, Integer.parseInt(aantalReceived));
+            dataopslag1.add(orderReceived);
 
-            ss.close();
+            if(naamReceived.equals("naam2"))
+                aanDeBeurt = true;
+
         } catch (Exception e) {
             System.out.println(e.toString());
         }
@@ -94,5 +108,21 @@ public class Speler1 {
                 ", weekNr=" + week +
                 ", dataopslag1=" + dataopslag1 +
                 '}';
+    }
+
+    public boolean isAanDeBeurt() {
+        return aanDeBeurt;
+    }
+
+    public boolean isActief() {
+        return actief;
+    }
+
+    public void setActief(boolean actief) {
+        this.actief = actief;
+    }
+
+    public void closeSocket() throws IOException {
+        socket1.close();
     }
 }
