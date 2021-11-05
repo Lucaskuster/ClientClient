@@ -4,7 +4,7 @@ import java.util.Scanner;
 public class ActiesSpeler1 {
 
     public static void main(String[] args) throws IOException {
-        Speler1 speler1 = new Speler1("naam1");
+        Speler speler1 = new Speler("naam1", 6666);
         boolean stoppen = false;
 
         do {
@@ -19,16 +19,19 @@ public class ActiesSpeler1 {
                     break;
                 case "o":
                     do {
-                        speler1.receive();
+                        speler1.receiveOrder();
                     } while (!speler1.isAanDeBeurt());
                     break;
+                case "n":
+                    speler1.newPlayers();
+                    break;
+                case "l":
+                    speler1.re
                 default:
                     System.out.println("---");
             }
         }
         while (!stoppen);
-
-        speler1.closeSocket();
 
         System.out.println(speler1.toString());
     }
