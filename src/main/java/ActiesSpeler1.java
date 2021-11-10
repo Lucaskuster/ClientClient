@@ -5,7 +5,7 @@ public class ActiesSpeler1 {
 
     public static void main(String[] args) throws IOException {
 
-        Speler speler1 = new Speler("naam1", 6666, 6665, "jdbc:sqlite:C:/Users/lucas/OneDrive/Documenten/HAN/Jaar 3/ASD-project/Onderzoeken/Data synchronisatie/Server client/Client1/src/main/resources/myDatabase1.db");
+        Speler speler1 = new Speler("naam1", 6666, 6665, true, "jdbc:sqlite:C:/Users/lucas/OneDrive/Documenten/HAN/Jaar 3/ASD-project/Onderzoeken/Data synchronisatie/Server client/Client1/src/main/resources/myDatabase1.db");
         boolean stoppen = false;
 
         do {
@@ -21,8 +21,11 @@ public class ActiesSpeler1 {
                     break;
                 case "o":
                     do {
-                        speler1.receive();
+                        speler1.receiveOrder();
                     } while (!speler1.isAanDeBeurt());
+                    break;
+                case "l":
+                    speler1.receivePlayer();
                     break;
                 default:
                     System.out.println("---");

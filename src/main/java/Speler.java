@@ -12,33 +12,42 @@ public class Speler {
     private final String naam;
     private int week;
     private boolean aanDeBeurt;
-    // TODO gebruik maken van actief boolean;
-    private boolean actief;
     private final ServerSocket socket;
     private final int portTo;
+    private final int portThis;
     private final String jdbcUrl;
 
     // De tijdelijke dataopslag
     private final LinkedList<Order> dataopslag;
 
-    public Speler(String naam, int portThis, int portTo, String jdbcUrl) throws IOException {
+    public Speler(String naam, int portThis, int portTo, boolean aanDeBeurt, String jdbcUrl) throws IOException {
         this.naam = naam;
         this.week = 1;
-        this.aanDeBeurt = true;
-        this.actief = true;
+        this.aanDeBeurt = aanDeBeurt;
         this.portTo = portTo;
+        this.portThis = portThis;
         this.socket = new ServerSocket(portThis);
         this.jdbcUrl = jdbcUrl;
 
         dataopslag = new LinkedList<>();
+
+        if (portThis != 6666) {
+            sendPlayer();
+        } else {
+            databaseAddPlayer(naam, portThis);
+        }
     }
 
+    /**
+     * Met deze methode plaatst de speler een bestelling en roept send() aan om de bestelling naar alle andere spelers te sturen.
+     *
+     * @param aantal is het aantal units dat de speler wil bestellen.
+     */
     public void plaatsOrder(int aantal) {
-
         Order order = new Order(week, this.naam, aantal);
         dataopslag.add(order);
         databaseAddOrder(order);
-        send(order);
+        sendOrder(order);
         week++;
     }
 
@@ -49,7 +58,7 @@ public class Speler {
      *
      * @param order is de te versturen order. Geplaatst door deze speler.
      */
-    private void send(Order order) {
+    private void sendOrder(Order order) {
         try {
             Socket s = new Socket("localhost", portTo);
 
@@ -61,7 +70,57 @@ public class Speler {
             s.close();
             aanDeBeurt = false;
         } catch (Exception e) {
-            System.out.println(e.toString());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Verstuurt eigen adress gegevens naar startplayer.
+     */
+    private void sendPlayer() {
+        try {
+            Socket s = new Socket("localhost", portTo);
+
+            List<String> player = new ArrayList<>();
+            player.add(naam);
+            player.add(String.valueOf(portThis));
+
+            ObjectOutputStream dout = new ObjectOutputStream(s.getOutputStream());
+            dout.writeObject(player);
+
+            dout.flush();
+            dout.close();
+            s.close();
+            receivePlayers();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Verstuurt alle adressgegevens van alle spelers naar de nieuwe speler
+     */
+    private void sendPlayers(int port) {
+        try {
+            Socket s = new Socket("localhost", port);
+
+            List<PlayerAdress> players = databaseGetPlayers();
+            List<String> player = new ArrayList<>();
+
+            assert players != null;
+            for (PlayerAdress playerAdress : players) {
+                player.add(playerAdress.getName());
+                player.add(String.valueOf(playerAdress.getPort()));
+            }
+
+            ObjectOutputStream dout = new ObjectOutputStream(s.getOutputStream());
+            dout.writeObject(player);
+
+            dout.flush();
+            dout.close();
+            s.close();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -82,7 +141,7 @@ public class Speler {
     /**
      * Ontvangt de verstuurde order van andere spelers en zet deze in de database van deze speler.
      */
-    public void receive() {
+    public void receiveOrder() {
         try {
             Socket speler = socket.accept(); //establishes connection
             ObjectInputStream dis = new ObjectInputStream(speler.getInputStream());
@@ -114,30 +173,101 @@ public class Speler {
             dataopslag.add(orderReceived);
             databaseAddOrder(orderReceived);
 
-            aanDeBeurt = true;
+            beurtWissel(orderReceived.naam);
 
         } catch (Exception e) {
             System.out.println(e.toString());
+            e.printStackTrace();
         }
     }
 
-    @Override
-    public String toString() {
-        return "Speler{" +
-                "naam='" + naam + '\'' +
-                ", weekNr=" + week +
-                ", dataopslag1=" + dataopslag +
-                '}';
+    public void receivePlayer() {
+        try {
+            Socket speler = socket.accept(); //establishes connection
+            ObjectInputStream dis = new ObjectInputStream(speler.getInputStream());
+
+            List<String> listOfMessages = (List<String>) dis.readObject();
+            System.out.println("Received [" + listOfMessages.size() + "] messages from: " + speler);
+
+            String naamReceived = null;
+            String portReceived = null;
+
+            for (String message : listOfMessages) {
+                switch (listOfMessages.indexOf(message)) {
+                    case 0:
+                        naamReceived = message;
+                        break;
+                    case 1:
+                        portReceived = message;
+                        databaseAddPlayer(naamReceived, Integer.parseInt(portReceived));
+                        break;
+                    default:
+                        System.out.println("Error");
+                }
+            }
+
+            assert portReceived != null;
+            sendPlayers(Integer.parseInt(portReceived));
+
+        } catch (Exception e) {
+            System.out.println(e.toString());
+            e.printStackTrace();
+        }
     }
 
-    public boolean isAanDeBeurt() {
-        return aanDeBeurt;
+    private void receivePlayers() {
+        try {
+            Socket speler = socket.accept(); //establishes connection
+            ObjectInputStream dis = new ObjectInputStream(speler.getInputStream());
+
+            List<String> listOfMessages = (List<String>) dis.readObject();
+            System.out.println("Received [" + listOfMessages.size() + "] messages from: " + speler);
+
+            int i = 0;
+            while (i < listOfMessages.size()) {
+                databaseAddPlayer(listOfMessages.get(i), Integer.parseInt(listOfMessages.get(i + 1)));
+                //sendPlayers(Integer.parseInt(listOfMessages.get(i + 1)));
+                i += 2;
+            }
+
+        } catch (
+                Exception e) {
+            System.out.println(e.toString());
+            e.printStackTrace();
+        }
+
     }
 
+    /**
+     * Kijkt of de vorige speler de speler voor deze speler is.
+     * Zo ja, dan is deze speler aan de beurt.
+     *
+     * @param vorigeSpeler de speler die de laatste zet heeft gezet.
+     */
+    private void beurtWissel(String vorigeSpeler) {
+        //TODO afvragen hoe duur het is om bij elke beurt wissel iedereen de lijst met namen op te halen uit de database.
+        List<PlayerAdress> spelers = databaseGetPlayers();
+        List<String> namen = new ArrayList<>();
 
-    public void closeSocket() throws IOException {
-        socket.close();
+        assert spelers != null;
+        for (PlayerAdress speler : spelers) {
+            namen.add(speler.getName());
+        }
+
+        for (String naam : namen) {
+            if (namen.get(naam.indexOf(naam) - 1).equals(vorigeSpeler)) {
+                aanDeBeurt = true;
+            }
+        }
     }
+
+    /*
+    for (String naam : spelers) {
+            if (spelers.get(naam.indexOf(naam) - 1).equals(vorigeSpeler)) {
+                aanDeBeurt = true;
+            }
+        }
+     */
 
     private void databaseAddOrder(Order order) {
         try {
@@ -156,30 +286,103 @@ public class Speler {
         }
     }
 
-    public void databaseExit() {
+    private void databaseAddPlayer(String naam, int port) {
         try {
             Connection connection = DriverManager.getConnection(jdbcUrl);
-            String sqlSelect = "SELECT * FROM \"order\"";
+            String sql = "INSERT INTO \"spelers\" VALUES( '" + naam + "', " + port + ")";
 
-            Statement selectStatement = connection.createStatement();
-            ResultSet result = selectStatement.executeQuery(sqlSelect);
-
-            while (result.next()) {
-                String week = result.getString("week");
-                String naam = result.getString("naam");
-                String aantal = result.getString("aantal");
-
-                System.out.println(week + " | " + naam + " | " + aantal);
-            }
-
-            String sqlDelete = "DELETE FROM \"order\"";
-
-            Statement deleteStatement = connection.createStatement();
-            deleteStatement.execute(sqlDelete);
+            Statement statement = connection.createStatement();
+            statement.execute(sql);
         } catch (SQLException e) {
             System.out.println("error");
             e.printStackTrace();
         }
     }
 
+    private List<PlayerAdress> databaseGetPlayers() {
+        try {
+            Connection connection = DriverManager.getConnection(jdbcUrl);
+            String sqlSelect = "SELECT * FROM main.spelers";
+
+            Statement selectStatement = connection.createStatement();
+            ResultSet result = selectStatement.executeQuery(sqlSelect);
+
+            List<PlayerAdress> players = new ArrayList<>();
+
+            while (result.next()) {
+                String naam = result.getString("naam");
+                int port = result.getInt("port");
+                PlayerAdress speler = new PlayerAdress(naam, port);
+                players.add(speler);
+            }
+
+            return players;
+        } catch (SQLException e) {
+            System.out.println("error");
+            e.printStackTrace();
+        }
+        //TODO wat anders voor neerzetten
+        return null;
+    }
+
+    public void databaseExit() {
+        try {
+            Connection connection = DriverManager.getConnection(jdbcUrl);
+            String sqlSelectOrders = "SELECT * FROM \"order\"";
+
+            Statement selectOrderStatement = connection.createStatement();
+            ResultSet resultOrder = selectOrderStatement.executeQuery(sqlSelectOrders);
+
+            while (resultOrder.next()) {
+                String week = resultOrder.getString("week");
+                String naam = resultOrder.getString("naam");
+                String aantal = resultOrder.getString("aantal");
+
+                System.out.println(week + " | " + naam + " | " + aantal);
+            }
+
+            String sqlOrderDelete = "DELETE FROM \"order\"";
+
+            Statement deleteOrderStatement = connection.createStatement();
+            deleteOrderStatement.execute(sqlOrderDelete);
+
+
+            String sqlSelectPlayers = "SELECT * FROM main.spelers";
+
+            Statement selectPlayerStatement = connection.createStatement();
+            ResultSet resultPlayer = selectOrderStatement.executeQuery(sqlSelectPlayers);
+
+            while (resultPlayer.next()) {
+                String name = resultPlayer.getString("naam");
+                String port = resultPlayer.getString("port");
+
+                System.out.println(name + " | " + port);
+            }
+
+            String sqlPlayerDelete = "DELETE FROM spelers";
+
+            Statement deletePlayerStatement = connection.createStatement();
+            deletePlayerStatement.execute(sqlPlayerDelete);
+        } catch (SQLException e) {
+            System.out.println("error");
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "Speler{" +
+                "naam='" + naam + '\'' +
+                ", weekNr=" + week +
+                ", dataopslag1=" + dataopslag +
+                '}';
+    }
+
+    public boolean isAanDeBeurt() {
+        return aanDeBeurt;
+    }
+
+    public void closeSocket() throws IOException {
+        socket.close();
+    }
 }
