@@ -60,7 +60,7 @@ public class Speler1 {
         List<String> output = new ArrayList<>();
         output.add(String.valueOf(order.week));
         output.add(order.naam);
-        output.add(String.valueOf((order.order)));
+        output.add(String.valueOf((order.aantal)));
         return output;
     }
 

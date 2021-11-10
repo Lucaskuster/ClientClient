@@ -1,12 +1,12 @@
 public class Order {
     protected int week;
     protected String naam;
-    protected int order;
+    protected int aantal;
 
     public Order(int week, String naam, int order) {
         this.week = week;
         this.naam = naam;
-        this.order = order;
+        this.aantal = order;
     }
 
     @Override
@@ -14,7 +14,7 @@ public class Order {
         return "Order{" +
                 "week=" + week +
                 ", naam='" + naam + '\'' +
-                ", order=" + order +
+                ", order=" + aantal +
                 '}';
     }
 }
