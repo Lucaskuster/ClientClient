@@ -5,15 +5,16 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Stream;
 
 public class Speler {
     private final String naam;
     private int week;
     private boolean aanDeBeurt;
     private final ServerSocket socket;
-    private final int portTo;
     private final int portThis;
     private final String jdbcUrl;
 
@@ -24,7 +25,6 @@ public class Speler {
         this.naam = naam;
         this.week = 1;
         this.aanDeBeurt = aanDeBeurt;
-        this.portTo = portTo;
         this.portThis = portThis;
         this.socket = new ServerSocket(portThis);
         this.jdbcUrl = jdbcUrl;
@@ -32,7 +32,7 @@ public class Speler {
         dataopslag = new LinkedList<>();
 
         if (portThis != 6666) {
-            sendPlayer();
+            sendPlayer(portTo);
         } else {
             databaseAddPlayer(naam, portThis);
         }
@@ -53,31 +53,38 @@ public class Speler {
 
     /**
      * Deze functie verstuurd de geplaatste order naar alle spelers
-     * Op dit moment nog naar een andere speler door 'portTo'
-     * Ook wordt er op dit moment nog gewerkt met Sockets die ook weg gaan.
+     * Op dit moment wordt er nog gewerkt met Sockets die ook weg gaan.
      *
      * @param order is de te versturen order. Geplaatst door deze speler.
      */
     private void sendOrder(Order order) {
-        try {
-            Socket s = new Socket("localhost", portTo);
+        ArrayList<PlayerAdress> allPlayers = (ArrayList<PlayerAdress>) databaseGetPlayers();
+        PlayerAdress thisPlayer = new PlayerAdress(this.naam, this.portThis);
 
-            ObjectOutputStream dout = new ObjectOutputStream(s.getOutputStream());
-            dout.writeObject(packaging(order));
+        assert allPlayers != null;
+        allPlayers.removeIf(playerAdress -> playerAdress.getName().equals(thisPlayer.getName()));
 
-            dout.flush();
-            dout.close();
-            s.close();
-            aanDeBeurt = false;
-        } catch (Exception e) {
-            e.printStackTrace();
+        for (PlayerAdress player : allPlayers) {
+            try {
+                Socket s = new Socket("localhost", player.getPort());
+
+                ObjectOutputStream dout = new ObjectOutputStream(s.getOutputStream());
+                dout.writeObject(packaging(order));
+
+                dout.flush();
+                dout.close();
+                s.close();
+                aanDeBeurt = false;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
         }
     }
 
     /**
-     * Verstuurt eigen adress gegevens naar startplayer.
+     * Verstuurt eigen adress gegevens naar startPlayer.
      */
-    private void sendPlayer() {
+    private void sendPlayer(int portTo) {
         try {
             Socket s = new Socket("localhost", portTo);
 
@@ -98,10 +105,49 @@ public class Speler {
     }
 
     /**
-     * Verstuurt alle adressgegevens van alle spelers naar de nieuwe speler
+     * Verstuurt alle adressgegevens van alle spelers naar alle andere spelers
      */
-    private void sendPlayers(int port) {
-        try {
+    private void sendPlayers(String newPlayerName, int newPlayerPort) {
+
+        ArrayList<PlayerAdress> allPlayers = (ArrayList<PlayerAdress>) databaseGetPlayers();
+        PlayerAdress thisPlayer = new PlayerAdress(this.naam, this.portThis);
+        List<String> toSendAll = new ArrayList<>();
+
+        assert allPlayers != null;
+        for (PlayerAdress playerAdress : allPlayers) {
+            toSendAll.add(playerAdress.getName());
+            toSendAll.add(String.valueOf(playerAdress.getPort()));
+        }
+
+        allPlayers.removeIf(playerAdress -> playerAdress.getName().equals(thisPlayer.getName()));
+
+        for (PlayerAdress playerAdress : allPlayers) {
+            try {
+                Socket s = new Socket("localhost", playerAdress.getPort());
+
+                ObjectOutputStream dout = new ObjectOutputStream(s.getOutputStream());
+
+                if (playerAdress.getPort() == newPlayerPort) {
+                    dout.writeObject(toSendAll);
+                } else {
+                    List<String> toSendNew = new ArrayList<>();
+                    toSendNew.add(newPlayerName);
+                    toSendNew.add(String.valueOf(newPlayerPort));
+                    dout.writeObject(toSendNew);
+                }
+
+                dout.flush();
+                dout.close();
+                s.close();
+                aanDeBeurt = false;
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /*
+    try {
             Socket s = new Socket("localhost", port);
 
             List<PlayerAdress> players = databaseGetPlayers();
@@ -122,7 +168,7 @@ public class Speler {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
+     */
 
     /**
      * Maakt van de order een te verzenden arraylist
@@ -207,7 +253,10 @@ public class Speler {
             }
 
             assert portReceived != null;
-            sendPlayers(Integer.parseInt(portReceived));
+
+            if (portThis == 6666) {
+                sendPlayers(naamReceived, Integer.parseInt(portReceived));
+            }
 
         } catch (Exception e) {
             System.out.println(e.toString());
@@ -265,29 +314,7 @@ public class Speler {
                 }
             }
         }
-
-        /*
-        for (String naam : namen) {
-            if (namen.indexOf(naam) == 0) {
-
-                System.out.println(namen.get(namen.size() - 1));
-                if (namen.get(namen.size() - 1).equals(vorigeSpeler)) {
-                    aanDeBeurt = true;
-                }
-            } else if (namen.get(naam.indexOf(naam) - 1).equals(vorigeSpeler)) {
-                aanDeBeurt = true;
-            }
-        }
-        */
     }
-
-    /*
-    for (String naam : spelers) {
-            if (spelers.get(naam.indexOf(naam) - 1).equals(vorigeSpeler)) {
-                aanDeBeurt = true;
-            }
-        }
-     */
 
     private void databaseAddOrder(Order order) {
         try {
@@ -369,6 +396,7 @@ public class Speler {
 
             String sqlSelectPlayers = "SELECT * FROM main.spelers";
 
+            // TODO
             Statement selectPlayerStatement = connection.createStatement();
             ResultSet resultPlayer = selectOrderStatement.executeQuery(sqlSelectPlayers);
 

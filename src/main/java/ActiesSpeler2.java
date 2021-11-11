@@ -22,6 +22,9 @@ public class ActiesSpeler2 {
                         speler2.receiveOrder();
                     } while (!speler2.isAanDeBeurt());
                     break;
+                case "l":
+                    speler2.receivePlayer();
+                    break;
                 default:
                     System.out.println("---");
             }
