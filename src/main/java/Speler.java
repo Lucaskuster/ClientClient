@@ -255,10 +255,30 @@ public class Speler {
         }
 
         for (String naam : namen) {
-            if (namen.get(naam.indexOf(naam) - 1).equals(vorigeSpeler)) {
+            if (namen.indexOf(this.naam) == 0) {
+                if (namen.get(namen.size() - 1).equals(vorigeSpeler)) {
+                    aanDeBeurt = true;
+                }
+            } else if (naam.equals(this.naam)) {
+                if (namen.get(namen.indexOf(naam) - 1).equals(vorigeSpeler)) {
+                    aanDeBeurt = true;
+                }
+            }
+        }
+
+        /*
+        for (String naam : namen) {
+            if (namen.indexOf(naam) == 0) {
+
+                System.out.println(namen.get(namen.size() - 1));
+                if (namen.get(namen.size() - 1).equals(vorigeSpeler)) {
+                    aanDeBeurt = true;
+                }
+            } else if (namen.get(naam.indexOf(naam) - 1).equals(vorigeSpeler)) {
                 aanDeBeurt = true;
             }
         }
+        */
     }
 
     /*
